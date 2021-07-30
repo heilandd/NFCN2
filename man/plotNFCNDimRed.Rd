@@ -10,7 +10,9 @@ plotNFCNDimRed(
   group.by = "seurat_clusters",
   pt.size = 0.2,
   pt.alpha = 0.5,
-  plot.connection = T
+  pt.con = c(0.4, 1e-05),
+  plot.connection = T,
+  correction.distance = NULL
 )
 }
 \value{

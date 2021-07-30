@@ -10,7 +10,8 @@ inferSpatialPosition(
   group.by = "seurat_clusters",
   NN = 500,
   intergrate.group.by = F,
-  RL_interaction = F
+  RL_interaction = F,
+  correction.distance = NULL
 )
 }
 \value{

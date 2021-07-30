@@ -184,9 +184,25 @@ getCleaned <- function(df, feat, q=0.1){
   return(df)
 }
 
+#' @title getDistance
+#' @author Dieter Henrik Heiland
+#' @description getDistance
+#' @inherit 
+#' @param coordinates A data.frame will rownames as identifier and coordinates names as x and y
+#' @return 
+#' @examples 
+#' 
+#' @export
 
-
-
+getDistance <- function(from,to){
+  distance <- function(x1,y1, x2,y2){sqrt((x2-x1)^2+(y2-y1)^2)}
+  purrr::map(.x=1:nrow(to), .f=function(i){
+    distance(x1=from$x[i],
+             y1=from$y[i],
+             x2=to$x[i],
+             y2=to$y[i])
+  }) %>%  unlist()
+}
 
 
 

@@ -12,7 +12,8 @@ plotNFCN <- function(object,
                      pt.size=0.2,
                      pt.alpha=0.5,
                      color.top=F,
-                     plot.connection=T){
+                     plot.connection=T,
+                     correction.distance=NULL){
   
   
   # Get data
@@ -43,10 +44,32 @@ plotNFCN <- function(object,
   
   if(plot.connection==T){
     
-    segment.data <- data.frame(x=object@assays$NFCN$model$receptor.top$x.p,
-               y=object@assays$NFCN$model$receptor.top$y.p,
-               xend=object@assays$NFCN$model$ligand.top$x.p,
-               yend=object@assays$NFCN$model$ligand.top$y.p)
+    receptor.top <- object@assays$NFCN$model$receptor.top
+    ligand.top <- object@assays$NFCN$model$ligand.top
+    
+    if(!is.null(correction.distance)){
+      
+      if(!is.null(object@assays$NFCN$model$top.partner$distance)){
+        
+        cor <- object@assays$NFCN$model$top.partner %>% filter(distance<correction.distance)
+        
+        receptor.top <- receptor.top %>% dplyr::filter(barcodes %in% cor$Receptor)
+        ligand.top <- ligand.top %>% dplyr::filter(barcodes %in% cor$Ligand)
+        
+      }else{ message("Distance is not quantified, please run the inferSpatialCorrection function ")}
+    }
+    
+    
+    
+    
+    segment.data <- 
+      data.frame(x=receptor.top$x.p,
+                 y=receptor.top$y.p,
+                 xend=ligand.top$x.p,
+                 yend=ligand.top$y.p)
+    
+    if(nrow(segment.data)<1) stop("no connections found or distance correction to strong .... ")
+    
     
     p <- p+
       geom_segment(data=segment.data, mapping=aes(x=xend,y=yend,xend=x,yend=y),size=seq(from=0.1, to=0.001, length.out = nrow(segment.data)), color="black", arrow = arrow(length = unit(0.1, "cm"), type = "closed"))
@@ -91,7 +114,9 @@ plotNFCNDimRed <- function(object,
                            group.by="seurat_clusters",
                            pt.size=0.2,
                            pt.alpha=0.5,
-                           plot.connection=T){
+                           pt.con=c(0.4, 0.00001),
+                           plot.connection=T,
+                           correction.distance=NULL){
   
   
   # Get data
@@ -117,13 +142,32 @@ plotNFCNDimRed <- function(object,
     r.umap <- corrdinates %>% dplyr::filter(barcodes %in% object@assays$NFCN$model$receptor.top$barcodes)
     l.umap <- corrdinates %>% dplyr::filter(barcodes %in% object@assays$NFCN$model$ligand.top$barcodes)
     
+    if(!is.null(correction.distance)){
+      
+      if(!is.null(object@assays$NFCN$model$top.partner$distance)){
+        
+        cor <- object@assays$NFCN$model$top.partner %>% filter(distance<correction.distance)
+        
+        r.umap <- r.umap %>% dplyr::filter(barcodes %in% cor$Receptor)
+        l.umap <- l.umap %>% dplyr::filter(barcodes %in% cor$Ligand)
+        
+      }else{ message("Distance is not quantified, please run the inferSpatialCorrection function ")}
+    }
+
+    
     segment.data <- data.frame(x=l.umap$UMAP_1,
                                y=l.umap$UMAP_2,
                                xend=r.umap$UMAP_1,
                                yend=r.umap$UMAP_2)
     
+    if(nrow(segment.data)<1) stop("no connections found or distance correction to strong .... ")
+    
+    
     p <- p+
-      geom_segment(data=segment.data, mapping=aes(x=x,y=y,xend=xend,yend=yend, color=l.umap[,group.by] ), alpha=pt.alpha, size=(seq(from=0.4, to=0.000001, length.out = nrow(segment.data))), arrow = arrow(length = unit(0.15, "cm"), type = "closed"))
+      geom_segment(data=segment.data, mapping=aes(x=x,y=y,xend=xend,yend=yend, color=l.umap[,group.by] ), 
+                   alpha=pt.alpha, 
+                   size=(seq(from=pt.con[1], to=pt.con[2], length.out = nrow(segment.data))), 
+                   arrow = arrow(length = unit(0.15, "cm"), type = "closed"))
     
     
   }
@@ -392,11 +436,14 @@ plotNFCNDotplot <- function(object,
     dplyr::mutate(ligand.p= object@meta.data[Ligand,{{group.by}}],
                   receptor.p= object@meta.data[Receptor,{{group.by}}]) %>% 
     dplyr::count(ligand.p,receptor.p) %>% 
-    dplyr::mutate(n=scales::rescale(n, c(0,1) )) %>% 
+    dplyr::mutate(n=scales::rescale(n, c(0,1) ),
+                  ligand.p=paste0("C_",ligand.p),
+                  receptor.p=paste0("C_",receptor.p)) %>% 
     reshape2::acast(ligand.p~receptor.p)
   partner[is.na(partner)] <- 0
   
-  corrplot::corrplot(partner %>% t(), is.corr = F, col=viridis::viridis(50))
+  
+  ggcorrplot::ggcorrplot(partner, method = "circle")+ggplot2::scale_fill_viridis_c(option="C")
   
   
 }
@@ -421,7 +468,72 @@ plotFunctionalDotplot <- function(functional,top=30){
 }
 
 
-
+#' @title Compare_Barplot
+#' @author Dieter Henrik Heiland
+#' @description Compare_Barplot
+#' @inherit 
+#' @return 
+#' @examples 
+#' 
+#' @export
+#' 
+Compare_Barplot=function(object,Feat, compare_to){
+  
+  plot_df=object@meta.data
+  
+  plot_df=plot_df[,c(Feat, compare_to)]
+  
+  names(plot_df)=c("Cx", "Tx")
+  
+  #plot_df$Cx=paste0("Cluster_",plot_df$Cx)
+  
+  
+  
+  p=ggplot(data=plot_df, aes(x=Tx, y=1, fill=Cx))+
+    
+    geom_bar(position="fill", stat="identity")+
+    
+    theme_classic()+
+    
+    xlab(compare_to)+
+    
+    #scale_fill_brewer(Feat,type='qual')+
+    
+    ylab("Percentage")+
+    
+    theme(
+      
+      plot.margin = margin(t = 50, r = 100, b = 50, l = 100, unit = "pt"),
+      
+      axis.text.y = element_text(color="black"),
+      
+      axis.text.x = element_text(color="black", angle = 75, vjust = .5)
+      
+      
+      
+    )
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  return(p)
+  
+  
+  
+  
+  
+}
 
 
 

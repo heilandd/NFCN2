@@ -77,10 +77,10 @@ inferConnectedPathways <- function(object,
   message("## 4/4 Prepare data")
   data.nfcn <- 
     SPATA2::joinWithGeneSets(spata.obj, gene_sets = pw, verbose = F, smooth=smooth, smooth_span=smooth_span) %>% 
-    dplyr::left_join(., SPATA2::joinWithFeatures(spata.obj, feature=group.by, verbose = F) %>% select(-sample, x, y)) %>% 
-    dplyr::left_join(., SPATA2::joinWithGenes(spata.obj, genes=ligand, verbose = F,smooth=smooth, smooth_span=smooth_span,average_genes=T) %>% select(-sample, x, y)) %>% 
+    dplyr::left_join(., SPATA2::joinWithFeatures(spata.obj, feature=group.by, verbose = F) %>% dplyr::select(-sample, x, y)) %>% 
+    dplyr::left_join(., SPATA2::joinWithGenes(spata.obj, genes=ligand, verbose = F,smooth=smooth, smooth_span=smooth_span,average_genes=T) %>% dplyr::select(-sample, x, y)) %>% 
     dplyr::rename("ligand":=mean_genes) %>% 
-    dplyr::left_join(., SPATA2::joinWithGenes(spata.obj, genes=receptor, verbose = F,smooth=smooth, smooth_span=smooth_span, average_genes=T) %>% select(-sample, x, y)) %>% 
+    dplyr::left_join(., SPATA2::joinWithGenes(spata.obj, genes=receptor, verbose = F,smooth=smooth, smooth_span=smooth_span, average_genes=T) %>% dplyr::select(-sample, x, y)) %>% 
     dplyr::rename("receptor":=mean_genes) %>% 
     as.data.frame()
   
@@ -206,7 +206,8 @@ inferSpatialPosition <- function(object,
                                  group.by="seurat_clusters",
                                  NN=500,
                                  intergrate.group.by=F,
-                                 RL_interaction=F){
+                                 RL_interaction=F,
+                                 correction.distance=NULL){
   
   future::plan("multiprocess", workers = 1)
   
@@ -220,6 +221,17 @@ inferSpatialPosition <- function(object,
   
   #Create a new variable for connected cells
   top <- object@assays$NFCN$model$top.partner
+  
+  if(!is.null(correction.distance)){
+    
+    if(!is.null(object@assays$NFCN$model$top.partner$distance)){
+      
+      top <- object@assays$NFCN$model$top.partner %>% filter(distance<correction.distance)
+      
+    }else{ message("Distance is not quantified, please run the inferSpatialCorrection function ")}
+  }
+  
+  
   object@meta.data$top <- "no"
   object@meta.data[rownames(object@meta.data) %in% c(top$Ligand, top$Receptor), ]$top <- "both"
   object@meta.data[rownames(object@meta.data) %in% c(top$Ligand), ]$top <- "Ligand"
@@ -386,6 +398,91 @@ inferSpatialPosition <- function(object,
   message("## Done ")
 }
 
+
+#' @title inferSpatialCorrection
+#' @author Dieter Henrik Heiland
+#' @description inferSpatialCorrection
+#' @inherit 
+#' @return 
+#' @examples 
+#' 
+#' @export
+
+inferSpatialCorrection<- function(object, inferSpatialPosition.object, assay="SCT", estimator=1, nr.genes=20){
+  
+  
+  # The most estimated cell paires need to be corrected by the likelihood of physical interaction
+  
+  cell.paires <- object@assays$NFCN$model$top.partner
+  
+  #Find most matched position
+  
+  message("## 1/3  Estimation of juxtaposition probability")
+  
+  p <- dplyr::progress_estimated(nrow(cell.paires))
+  
+  map.dist <- purrr::map(.x=1:nrow(cell.paires),
+                         .f=function(i){
+  
+  p$tick()$print()
+  
+  Ligand.sig <- 
+    object@assays[[assay]]@scale.data[, cell.paires[i,1]] %>% 
+    as.data.frame() %>% 
+    dplyr::rename("gene":=.) %>% 
+    dplyr::arrange(desc(gene)) %>% 
+    head(nr.genes) %>% 
+    rownames()
+  Receptor.sig <- 
+    object@assays[[assay]]@scale.data[, cell.paires[i,2]] %>% 
+    as.data.frame() %>% 
+    dplyr::rename("gene":=.) %>% 
+    dplyr::arrange(desc(gene)) %>% 
+    head(nr.genes) %>% 
+    rownames()
+  
+  Ligand.pos <- 
+    inferSpatialPosition.object[[2]] %>% 
+    SPATA2::joinWithGenes(genes=Ligand.sig, average_genes = T, verbose = F) %>% 
+    dplyr::rename("Ligant":=mean_genes) %>% 
+    dplyr::arrange(desc(Ligant))
+  
+  Receptor.pos <- 
+    inferSpatialPosition.object[[2]] %>% 
+    SPATA2::joinWithGenes(genes=Receptor.sig, average_genes = T, verbose = F)%>% 
+    dplyr::rename("Receptor":=mean_genes) %>% 
+    dplyr::arrange(desc(Receptor))
+  
+  relative.dist <- NFCN2::getDistance(Ligand.pos, Receptor.pos)[1:estimator] %>% mean()
+  
+  return(relative.dist)
+                         }) %>% unlist()
+  
+  cell.paires$distance <- map.dist
+  
+  
+  cell.paires <-
+    object@assays$NFCN$model$receptor.top %>% 
+    dplyr::select(barcodes, sum.f) %>% 
+    dplyr::rename("Receptor":=barcodes) %>% 
+    dplyr::left_join(cell.paires, ., by="Receptor") %>% 
+    dplyr::rename("Receptor.f":=sum.f)
+  
+  cell.paires <-
+    object@assays$NFCN$model$ligand.top %>% 
+    dplyr::select(barcodes, sum.f) %>% 
+    dplyr::rename("Ligand":=barcodes) %>% 
+    dplyr::left_join(cell.paires, ., by="Ligand") %>% 
+    dplyr::rename("Ligand.f":=sum.f)
+  
+  ggplot(data=cell.paires, mapping=aes(x=distance, y=Ligand.f+Receptor.f))+geom_point()+theme_classic()+geom_smooth(se=F)
+  
+  
+  object@assays$NFCN$model$top.partner <- cell.paires
+  
+  return(object)
+  
+}
 
 
 

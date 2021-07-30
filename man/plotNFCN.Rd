@@ -10,7 +10,8 @@ plotNFCN(
   pt.size = 0.2,
   pt.alpha = 0.5,
   color.top = F,
-  plot.connection = T
+  plot.connection = T,
+  correction.distance = NULL
 )
 }
 \value{
