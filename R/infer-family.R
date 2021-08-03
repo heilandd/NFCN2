@@ -475,7 +475,7 @@ inferSpatialCorrection<- function(object, inferSpatialPosition.object, assay="SC
     dplyr::left_join(cell.paires, ., by="Ligand") %>% 
     dplyr::rename("Ligand.f":=sum.f)
   
-  ggplot(data=cell.paires, mapping=aes(x=distance, y=Ligand.f+Receptor.f))+geom_point()+theme_classic()+geom_smooth(se=F)
+  #ggplot(data=cell.paires, mapping=aes(x=distance, y=Ligand.f+Receptor.f))+geom_point()+theme_classic()+geom_smooth(se=F)
   
   
   object@assays$NFCN$model$top.partner <- cell.paires

@@ -536,4 +536,31 @@ Compare_Barplot=function(object,Feat, compare_to){
 }
 
 
-
+#' @author Dieter Henrik Heiland
+#' @description plot.donut
+#' @inherit 
+#' @return 
+#' @examples 
+#' 
+#' @export
+#' 
+plotDonut <- function(table){
+  
+  
+  data <- data.frame(table)
+  base::names(data) <- c("category","count")
+  data$fraction = data$count / base::sum(data$count)
+  data$ymax = base::cumsum(data$fraction)
+  data$ymin = c(0, utils::head(data$ymax, n=-1))
+  
+  # Make the plot
+  ggplot2::ggplot(data, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=category)) +
+    ggplot2::geom_rect() +
+    ggplot2::coord_polar(theta="y") +
+    ggplot2::xlim(c(2, 4))+ 
+    ggplot2::theme_void()
+  
+  
+  
+  
+}

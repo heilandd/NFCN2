@@ -167,6 +167,50 @@ CD8 <- readRDS("CD8.Tcells.RDS")
 Seurat::DimPlot(CD4)
 Seurat::DimPlot(CD8)
 
+CD8@meta.data$JAK <- 2
+CD8@meta.data[CD8@meta.data$sample=="P234_JAK", ]$JAK=1
+
+DimPlot(CD8,reduction="umap", group.by = "JAK", pt.size = 3, order=T)
+
+UMAP <- CD8@reductions$umap@cell.embeddings %>% as.data.frame()
+ggplot(UMAP, mapping=aes(x=UMAP_1, y=UMAP_2))+geom_point(color="grey", size=8)+theme_classic()+
+  geom_point(data=UMAP[CD8@meta.data[CD8@meta.data$sample=="P234_JAK", ] %>% rownames(), ], mapping=aes(x=UMAP_1, y=UMAP_2), color="red", size=1)
+  
+NFCN2::Compare_Barplot(CD8,  "seurat_clusters", "JAK")
+
+
+FeaturePlot(object = CD8, 
+            reduction="umap", 
+            features = "GZMK", 
+            pt.size = 4, order=T)+
+  scale_color_viridis_c(option="C", limit=c(1.5,3), oob = scales::squish)
+
+
+DimPlot(CD4,reduction="umap", group.by = "JAK", pt.size = 3, order=T)
+
+CD4@meta.data$JAK <- 2
+CD4@meta.data[CD4@meta.data$sample=="P234_JAK", ]$JAK=1
+
+UMAP <- CD4@reductions$umap@cell.embeddings %>% as.data.frame()
+ggplot(UMAP, mapping=aes(x=UMAP_1, y=UMAP_2))+geom_point(color="grey", size=8)+theme_classic()+
+  geom_point(data=UMAP[CD4@meta.data[CD4@meta.data$sample=="P234_JAK", ] %>% rownames(), ], mapping=aes(x=UMAP_1, y=UMAP_2), color="red", size=1)
+
+NFCN2::Compare_Barplot(CD4,  "seurat_clusters", "JAK")
+
+
+FeaturePlot(object = CD4, 
+            reduction="umap", 
+            features = "PDCD1", 
+            pt.size = 4, order=T)+
+  scale_color_viridis_c(option="C", limit=c(0.2,1), oob = scales::squish)
+
+tab <- table(object@meta.data %>% filter(JAK=="JAK") %>% filter(seurat_clusters %in% {{target}}) %>% pull(seurat_clusters)%>% as.character())
+
+NFCN2::plotDonut(tab)
+
+
+
+
 inter <- intersect(object@meta.data %>% rownames() , CD4@meta.data %>% rownames())
 CD4 <- subset(CD4, cells=inter)
 
@@ -349,7 +393,14 @@ object@meta.data[myeloid@meta.data %>% rownames(), ]$seurat_clusters <- myeloid@
 object@meta.data$seurat_clusters <- as.factor(object@meta.data$seurat_clusters)
 
 object <- Seurat::SetIdent(object, value="seurat_clusters")
-DimPlot(object,reduction="ref.umap")
+object@meta.data$JAK <- NA
+object@meta.data[object@meta.data$sample=="P234_JAK", ]$JAK="JAK"
+DimPlot(object,reduction="ref.umap", group.by = "JAK")
+
+
+
+
+
 
 object@reductions$umap <- object@reductions$ref.umap
 colnames(object@reductions$umap@cell.embeddings) <- c("UMAP_1", "UMAP_2")
